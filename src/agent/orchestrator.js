@@ -4,6 +4,7 @@
 import policy from './policy.json';
 import { TOOL_CATALOG, TOOL_IMPLS } from './tools.js';
 import { buildDecisionPrompt } from './prompts.js';
+import { getRuntime } from './runtimes.js';
 import {
   startRun,
   appendStep,
@@ -12,66 +13,59 @@ import {
   getSnapshot,
 } from './traceStore.js';
 
-const PRIMARY_MODEL = 'gemma4:e4b';
-const FALLBACK_MODEL = 'gemma2';
-const OLLAMA_URL = 'http://localhost:11434/api/generate';
-
-// ---------- LLM client with model fallback ----------
-async function callOllama(prompt, model) {
-  const response = await fetch(OLLAMA_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, prompt, stream: false, format: 'json' }),
-  });
-  if (!response.ok) throw new Error(`Ollama HTTP ${response.status}`);
-  const data = await response.json();
-  let raw = data.response || '';
-  raw = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
-  return raw;
-}
+// LLM tier chain — tried top-to-bottom on each call. Each entry names a runtime
+// adapter (see runtimes.js), the model id passed to that runtime, and a label
+// shown in the Live Trace tab so the audience sees which silicon served the
+// step. Reorder this array to flip primary/fallback without touching the loop.
+const LLM_CHAIN = [
+  { runtime: 'openvino', model: 'llama-3.2-3b-instruct',    label: 'NPU/Llama-3.2-3B' },
+  { runtime: 'openvino', model: 'phi-3.5-mini-instruct',    label: 'NPU/Phi-3.5-Mini' },
+  { runtime: 'openvino', model: 'mistral-7b-instruct-v0.3', label: 'iGPU/Mistral-7B' },
+  { runtime: 'ollama',   model: 'gemma4:e4b',               label: 'CPU/Ollama-Gemma4' },
+  { runtime: 'ollama',   model: 'gemma2',                   label: 'CPU/Ollama-Gemma2' },
+];
 
 function makeLlmClient({ runId, kind }) {
-  // Returns an llm(prompt) fn that emits trace events on each call.
+  // Returns an llm(prompt) fn that walks the LLM_CHAIN until one tier returns
+  // successfully. Each tier failure is logged into the same trace step so
+  // viewers can see the fallback path without navigating between rows.
   return async (prompt) => {
     const startedAt = Date.now();
     const stepIdx = appendLlmStep(runId, kind, prompt);
-    let modelUsed = PRIMARY_MODEL;
-    let attempt = 1;
-    try {
-      const out = await callOllama(prompt, PRIMARY_MODEL);
-      updateStep(runId, stepIdx, {
-        status: 'success',
-        latencyMs: Date.now() - startedAt,
-        model: modelUsed,
-        attempt,
-        response: out,
-      });
-      return out;
-    } catch {
-      attempt = 2;
-      modelUsed = FALLBACK_MODEL;
+    const triedLabels = [];
+    let lastErr = null;
+
+    for (let attempt = 1; attempt <= LLM_CHAIN.length; attempt++) {
+      const tier = LLM_CHAIN[attempt - 1];
       try {
-        const out = await callOllama(prompt, FALLBACK_MODEL);
+        const adapter = getRuntime(tier.runtime);
+        const out = await adapter.generate({ prompt, model: tier.model });
         updateStep(runId, stepIdx, {
           status: 'success',
           latencyMs: Date.now() - startedAt,
-          model: modelUsed,
+          model: tier.model,
+          label: tier.label,
+          runtime: tier.runtime,
           attempt,
-          fallbackFrom: PRIMARY_MODEL,
+          fallbackFrom: triedLabels.length > 0 ? triedLabels.join(' → ') : undefined,
           response: out,
         });
         return out;
-      } catch (err2) {
-        updateStep(runId, stepIdx, {
-          status: 'failed',
-          latencyMs: Date.now() - startedAt,
-          model: modelUsed,
-          attempt,
-          error: String(err2.message || err2),
-        });
-        throw err2;
+      } catch (err) {
+        triedLabels.push(tier.label);
+        lastErr = err;
+        // Continue to next tier.
       }
     }
+
+    updateStep(runId, stepIdx, {
+      status: 'failed',
+      latencyMs: Date.now() - startedAt,
+      attempt: LLM_CHAIN.length,
+      label: triedLabels.join(' → '),
+      error: String(lastErr?.message || lastErr || 'all LLM tiers failed'),
+    });
+    throw lastErr || new Error('all LLM tiers failed');
   };
 }
 

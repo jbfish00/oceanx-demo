@@ -56,18 +56,45 @@ flowchart LR
 
 ## Running locally
 
+The agent walks an LLM tier chain top-to-bottom on each call (see `LLM_CHAIN` in [src/agent/orchestrator.js](src/agent/orchestrator.js)). Out of the box the chain prefers NPU/iGPU runtimes via LM Studio and falls all the way through to Ollama on CPU. **Any one tier being available is enough to run the demo** — you don't need both stacks.
+
 ```bash
-# 1. Make sure Ollama is up with the right models
+# Required: at least one of the two stacks below must be running.
+
+# Option 1 — Ollama (CPU, simplest setup)
 ollama pull gemma4:e4b   # primary
 ollama pull gemma2       # fallback
 ollama serve
 
-# 2. Install + run
+# Option 2 — LM Studio with OpenVINO runtime (Intel NPU + Arc iGPU)
+# See the "Running with the Intel NPU" section below.
+
+# Then:
 npm install
 npm run dev
 ```
 
 Open the dev URL, click **Upload Directory & Run Agents**, point it at any folder containing the seven sample invoice files (or any mix of `.pdf`, `.png`, `.jpg`, `.csv`, `.txt`).
+
+## Running with the Intel NPU
+
+Tested on **Intel Core Ultra 9 185H** (Meteor Lake-H, 11.5-TOPS AI Boost NPU + Intel Arc iGPU). The same setup applies to other Core Ultra laptop SKUs.
+
+1. **Install LM Studio** ≥ 0.3.6 from https://lmstudio.ai
+2. **Enable the OpenVINO runtime**: Settings → Runtimes → install "OpenVINO". This pulls Intel's NPU + GPU plugin DLLs.
+3. **Pull these OpenVINO models** from the model browser (filter by "OpenVINO"):
+   - `OpenVINO/Llama-3.2-3B-Instruct-int4-ov` — primary NPU tier (3B INT4)
+   - `OpenVINO/Phi-3.5-mini-instruct-int4-ov` — secondary NPU tier (3.8B INT4)
+   - `OpenVINO/Mistral-7B-Instruct-v0.3-int4-ov` — iGPU tier (7B doesn't fit on Meteor Lake's NPU)
+4. **Configure each model's device** in LM Studio's load options:
+   - Llama 3.2 3B → Device: **NPU**
+   - Phi-3.5-Mini → Device: **NPU**
+   - Mistral 7B → Device: **GPU** (Intel Arc)
+   First-load on NPU takes 90–180 s while OpenVINO compiles the graph; subsequent loads are instant.
+5. **Start the local server**: Developer tab → Start Server (default port 1234, OpenAI-compatible).
+6. Reload the demo. The Live Trace tab will now show `NPU/Llama-3.2-3B` (green badge) on each LLM step. Stop LM Studio mid-batch to see the chain transparently fall through to Ollama with the tier shown in amber.
+
+The model ids in `LLM_CHAIN` must match the ids LM Studio assigns (visible in the Developer tab next to each loaded model). Edit them there if your local ids differ.
 
 ### Sample inputs
 

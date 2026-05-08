@@ -6,7 +6,9 @@ Target: hit all 5 rubric criteria (clarity, practical usefulness, automation dep
 
 ## 0. Pre-flight (do NOT screen-share yet)
 
-- [ ] `ollama serve` running, `ollama list` shows both `gemma4:e4b` and `gemma2`
+- [ ] LM Studio's local server running on `:1234`; `Llama-3.2-3B-Instruct` loaded with **Device: NPU**, `Mistral-7B-Instruct-v0.3` loaded with **Device: GPU** (the iGPU tier safety net)
+- [ ] `ollama serve` running, `ollama list` shows both `gemma4:e4b` and `gemma2` (final fallback if LM Studio drops)
+- [ ] One warm-up run already executed since LM Studio booted, so first-load NPU compilation isn't on stage
 - [ ] `npm run dev` running, dev URL open in a clean browser window
 - [ ] `inbound_invoices/` folder ready with all 7 sample files
 - [ ] Chaos mode is OFF
@@ -29,14 +31,16 @@ Target: hit all 5 rubric criteria (clarity, practical usefulness, automation dep
 4. Click **View Xero payload** on Horizon → JSON modal opens with real-shape Xero `POST /invoices` body
 5. Click **View GoCardless** on Horizon → mandate + scheduled payment
 
-## 3. Switch to Live Trace (60 s)
+## 3. Switch to Live Trace (75 s)
 
 1. Click the **Live Trace** tab
 2. Point at the header strip: runs, tool calls, total LLM ms, retries, escalated count
 3. Open the Meridian (Chapter 11) run → expand a step or two:
    > "You can see the agent's thought, the prompt sent, the raw JSON response, and the latency — every decision is auditable."
-4. Click **Download audit.csv** → show the file in the OS download bar
-   > "One row per agent step — drop straight into Splunk, Datadog, or compliance archive."
+4. **Highlight the green `NPU/Llama-3.2-3B` badge on each step:**
+   > "Every LLM call you just saw was served by the NPU on this laptop's Core Ultra — 11.5 TOPS at single-digit watts. The agent walks a tier chain: NPU first, Intel iGPU second for harder prompts, then CPU Ollama as the safety net. If I close LM Studio mid-run right now, the next step transparently falls through and the agent keeps going. The audience sees the silicon swap in the trace."
+5. Click **Download audit.csv** → show the file in the OS download bar
+   > "One row per agent step, including which silicon served each LLM call — drop straight into Splunk, Datadog, or compliance archive."
 
 ## 4. Demonstrate resilience — Chaos mode (45 s)
 
@@ -70,7 +74,10 @@ Anticipated questions + crisp answers:
 
 ---
 
-## Backup if Ollama goes sideways on stage
+## Backup if anything goes sideways on stage
 
-- The orchestrator already has a `gemma2` fallback baked in — if `gemma4:e4b` errors, you'll see a small "fallback" badge in the trace and the demo continues
-- If both fail: open the Architecture tab and walk the diagram + the "How this scales" panel — that alone covers 3 of the 5 rubric criteria
+- **NPU drops** → orchestrator transparently falls through to `iGPU/Mistral-7B` (LM Studio, same HTTP server). Visible in trace; demo continues without a blip
+- **All of LM Studio drops** → falls through to `CPU/Ollama-Gemma4`, then `CPU/Ollama-Gemma2`. Slower but functionally identical
+- **Both stacks dead** → open the Architecture tab and walk the diagram + the "How this scales" panel; that alone covers 3 of the 5 rubric criteria
+
+The four-tier chain means it would take a complete laptop meltdown to lose the demo — and that's already a great talking point about resilience.

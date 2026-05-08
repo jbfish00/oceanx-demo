@@ -29,6 +29,11 @@ export default function TraceStep({ step, idx }) {
         <span className="text-xs font-mono text-gray-400 mt-1 w-6">{String(idx).padStart(2, '0')}</span>
         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${kind.cls}`}>{kind.label}</span>
         <span className="font-mono text-sm font-semibold text-gray-900 flex-1">{step.name}</span>
+        {step.label && (
+          <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${runtimeBadgeCls(step.label)}`}>
+            {step.label}
+          </span>
+        )}
         {step.attempt > 1 && (
           <span className="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded">
             try #{step.attempt}
@@ -65,13 +70,21 @@ export default function TraceStep({ step, idx }) {
           )}
           {step.fallbackFrom && (
             <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-              Primary model <code>{step.fallbackFrom}</code> failed — recovered via fallback <code>{step.model}</code>.
+              Tried first: <code>{step.fallbackFrom}</code> — recovered via <code>{step.label || step.model}</code>.
             </div>
           )}
         </div>
       )}
     </div>
   );
+}
+
+function runtimeBadgeCls(label) {
+  // Color-code by silicon: NPU green (lowest power), iGPU blue, CPU gray.
+  if (label.startsWith('NPU/')) return 'bg-emerald-100 text-emerald-800 border border-emerald-200';
+  if (label.startsWith('iGPU/')) return 'bg-sky-100 text-sky-800 border border-sky-200';
+  if (label.startsWith('CPU/')) return 'bg-slate-100 text-slate-700 border border-slate-200';
+  return 'bg-gray-100 text-gray-700 border border-gray-200';
 }
 
 function Block({ label, body, tone }) {
