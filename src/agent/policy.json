@@ -1,0 +1,26 @@
+{
+  "$comment": "Externalized risk and routing policy. Hot-loaded by the orchestrator so reviewers can see decision logic separate from prompts.",
+  "version": "1.0.0",
+  "riskBands": [
+    { "name": "STANDARD",   "scoreRange": [0, 30],   "examples": ["clean payment history", "no adverse signals"] },
+    { "name": "WATCH",      "scoreRange": [31, 70],  "examples": ["minor delay", "first-time counterparty"] },
+    { "name": "ELEVATED",   "scoreRange": [71, 89],  "examples": ["late fees applied", "liquidity warning", "extended-terms request"] },
+    { "name": "CRITICAL",   "scoreRange": [90, 100], "examples": ["chapter 11 / bankruptcy", "extreme credit event"] }
+  ],
+  "routing": {
+    "escalateIfRiskScoreAbove": 70,
+    "escalateIfConfidenceBelow": 0.7,
+    "escalateIfFlagsContainAny": ["CHAPTER_11_FILED", "EXTREME_CREDIT_RISK", "LIQUIDITY_WATCH"],
+    "stepCap": 8,
+    "toolRetry": { "maxAttempts": 3, "backoffMs": [200, 600, 1500] }
+  },
+  "happyPath": [
+    "extractInvoice",
+    "lookupCompanyHistory",
+    "scoreRisk",
+    "generateXeroInvoice",
+    "scheduleGoCardlessDebit",
+    "updateHubSpotDeal",
+    "done"
+  ]
+}
