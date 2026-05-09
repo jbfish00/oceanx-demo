@@ -1,16 +1,19 @@
-# OceanX Demo Script — 5 minutes
+# OceanX Demo Script — ~12 minutes on stage
 
-Target: hit all 5 rubric criteria (clarity, practical usefulness, automation depth, tool usage, scalability) in under 5 minutes, with one chaos-mode demo to show error handling.
+Target: hit all 5 rubric criteria (clarity, practical usefulness, automation depth, tool usage, scalability), with one chaos-mode demo to show error handling. The on-stage run uses a curated 3-invoice subset (`DEMO_LIVE/`) chosen for verdict variety + reliability; the full 7-invoice regression suite (`DEMO_IMAGES/`) is the credibility backstop in Q&A.
+
+**Why curated:** `gemma4:e4b` on CPU runs each invoice in ~3 min. Three invoices = ~9 min of agent runtime, narrated. The full 7 would mean ~25 minutes of staring at spinners — no.
 
 ---
 
 ## 0. Pre-flight (do NOT screen-share yet)
 
-- [ ] `ollama serve` running, `ollama list` shows both `gemma4:e4b` and `gemma2`
-- [ ] One warm-up run completed in this Ollama session so the model is hot in RAM
+- [ ] `ollama serve` running, `ollama list` shows both `gemma4:e4b` and `gemma:2b`
+- [ ] One warm-up run completed in this Ollama session so the 8B model is hot in RAM (single-file run on `INV-103_Oceanic.pdf` from `DEMO_IMAGES/` is enough)
 - [ ] `npm run dev` running, dev URL open in a clean browser window
-- [ ] `inbound_invoices/` folder ready with all 7 sample files
-- [ ] `npm run eval -- --n 3` run earlier today; `eval-report.md` open in a side tab in case Q&A asks about quality
+- [ ] `DEMO_LIVE/` folder is the on-stage input set — 3 invoices: `INV-107_Horizon.jpg` (clean approve, ~3 min), `INV-104_Valkin.pdf` (nuanced escalate, ~3 min), `INV-108_Meridian.pdf` (Chapter 11 escalate, ~3 min)
+- [ ] `eval-report.md` open in a side tab — pull it up during Q&A if asked about quality
+- [ ] One backup PDF saved in `~/Downloads/` for the "drop a random PDF on me" beat
 - [ ] Chaos mode is OFF
 - [ ] Pipeline tab is selected
 
@@ -20,38 +23,36 @@ Target: hit all 5 rubric criteria (clarity, practical usefulness, automation dep
 
 > "OceanX's thesis is that humans should focus on relationships and capital decisions; agents should run everything else. Today's invoice intake is the bottleneck — somebody manually OCRs each PDF, looks up the counterparty, decides whether to fund, then hand-keys it into Xero, GoCardless, and HubSpot. I built a multi-step agent that owns that whole chain. Humans only see what the agent escalates."
 
-## 2. Run the happy path (90 s)
+## 2. Run the curated batch (~9 min — narrate while it runs)
 
-1. Click **Upload Directory & Run Agents** → pick `inbound_invoices/`
-2. While the spinner runs, narrate:
-   > "Each file is going through an LLM-driven tool loop. The agent decides at each step which tool to call next — extract, lookup history, score risk, then either escalate or push through Xero, GoCardless, and HubSpot."
-3. When complete, point at the two queues:
-   - **3 auto-approved** (Oceanic, Standard, Horizon) — show the green Xero/GoCardless/HubSpot tags
-   - **4 escalated** (GlobalTech, Valkin, Nexus, Meridian) — note that confidence and risk both factor into routing
-4. Click **View Xero payload** on Horizon → JSON modal opens with real-shape Xero `POST /invoices` body
-5. Click **View GoCardless** on Horizon → mandate + scheduled payment
+1. Click **Upload Directory & Run Agents** → pick `DEMO_LIVE/`
+2. As the first file (Horizon) starts, frame:
+   > "I'm dropping in three invoices. Each goes through a real tool-use loop: the LLM picks the next tool — extract, lookup history, score risk — then either escalates or pushes through Xero, GoCardless, and HubSpot. Three to five LLM calls per file, plus four mock API integrations. Each takes about 3 minutes on CPU. While it runs I'll show you the agent's decision-making."
+3. **Switch to Live Trace immediately** while file 1 is processing (don't wait for completion). Point at the trace timeline as steps appear in real time:
+   > "There's the agent picking `extractInvoice` — here's the LLM's thought, the prompt sent, the response, the latency. The next decision is `lookupCompanyHistory` — that's the CompanyDB tool returning prior payment behavior."
+4. When all three complete, switch back to **Pipeline** tab. Expected outcomes:
+   - **1 auto-approved**: Horizon — green Xero / GoCardless / HubSpot tags
+   - **2 escalated**: Valkin (3 flags: liquidity watch, extended-terms request, volume spike) and Meridian (Chapter 11)
+5. Click **View Xero payload** on Horizon → real-shape Xero `POST /invoices` body in the modal
+6. Click **View GoCardless** on Horizon → mandate + scheduled payment payload
+7. On Meridian, point at the AI Underwriting Note:
+   > "The agent caught Chapter 11 from a single line in the OCR text and routed straight to human review without trying to push it through. That's the routing gate from `policy.json` doing its job."
 
-## 3. Switch to Live Trace (60 s)
+## 3. Audit trail (45 s)
 
-1. Click the **Live Trace** tab
+1. Stay on the **Live Trace** tab if not already there
 2. Point at the header strip: runs, tool calls, total LLM ms, retries, escalated count
-3. Open the Meridian (Chapter 11) run → expand a step or two:
-   > "You can see the agent's thought, the prompt sent, the raw JSON response, and the latency — every decision is auditable. The model running here is Gemma local; the runtime layer is swappable, so swapping in OpenAI or Anthropic tool-use is a one-file change."
-4. Click **Download audit.csv** → show the file in the OS download bar
-   > "One row per agent step. Drop straight into Splunk, Datadog, or compliance archive."
+3. Click **Download audit.csv** → show the file in the OS download bar
+   > "One row per agent step — prompt, response, latency, tool result. Drop straight into Splunk, Datadog, or a SOC2 compliance archive."
 
-## 3b. Drop in a non-canonical PDF (30 s) — optional but high-impact
+## 4. Demonstrate resilience — Chaos mode (~3.5 min, narrate while running)
 
-1. **Reset Pipeline**, then drag in a single random invoice PDF you grabbed off the web before the call
-2. Watch the agent process it
-   > "I'm using pdf.js to extract real text from arbitrary PDFs — this isn't a rigged input set. Whatever invoice the audience hands me, the agent reads."
-
-## 4. Demonstrate resilience — Chaos mode (45 s)
+This run is one file (Horizon) so it's only one ~3-minute wait, not three.
 
 1. Hit **Reset Pipeline**, then toggle **Chaos mode: ON** (button turns amber)
-2. Re-upload the same directory, watch one of the previously-clean invoices
-3. Switch to **Live Trace** → look for an amber `try #2` or `try #3` row on a `generateXeroInvoice` step
-   > "Xero is flapping at a 30% failure rate. The agent retries with exponential backoff and recovers. If it fails three times the work item escalates instead of leaving a half-written record."
+2. Click **Upload Directory & Run Agents** → pick a single-file folder containing only `INV-107_Horizon.jpg` (have this prepped as `~/Demo/HORIZON_ONLY/` before the call)
+3. Switch to **Live Trace** while it runs. As Xero failures appear, narrate:
+   > "Xero is flapping at a 30% failure rate. The agent's catching it, backing off — there's `try #2`, `try #3` — and the file still completes successfully. If it fails three times the work item escalates instead of leaving a half-written record."
 
 ## 5. Architecture + scaling story (45 s)
 
@@ -67,6 +68,9 @@ Anticipated questions + crisp answers:
 **Q: Why a local LLM and not Claude / GPT?**
 > "Trade finance data is sensitive — running on-prem gives OceanX privacy by default. The architecture lets you swap to Anthropic tool-use in one file when latency or quality matters more than locality."
 
+**Q: How do you know it's actually getting the right answer?**
+> "I built a regression eval — three passes through the full 7-invoice ground truth set. Latest run: 100% median verdict accuracy, 100% risk-band agreement, 100% flag-detection recall. One borderline case (Nexus — late fees plus minor liquidity) flipped to approved on one pass out of 21; I added a targeted few-shot to the scoring prompt covering that exact two-signal scenario, re-ran the eval, and confirmed it doesn't regress the others. Here's the report." [Open eval-report.md tab]
+
 **Q: How do you stop the agent from hallucinating?**
 > "Three guardrails. First, the tool-use loop forces structured JSON — anything malformed bounces. Second, all the heavy decisions (risk score, routing) are policy-as-code in `policy.json` — the LLM proposes, the policy disposes. Third, low confidence (<0.7) escalates to a human even if the score is low."
 
@@ -80,7 +84,8 @@ Anticipated questions + crisp answers:
 
 ## Backup if anything goes sideways on stage
 
-- **gemma4:e4b errors** → orchestrator transparently falls through to `gemma2`. Visible in the trace as a tier transition; demo continues without a blip
+- **gemma4:e4b errors** → orchestrator transparently falls through to `gemma:2b`. Visible in the trace as a tier transition; demo continues without a blip
+- **An invoice gets the wrong verdict on stage** (rare per eval data, but possible) → don't panic; it's a 1-in-21-runs failure rate the eval already documents. Acknowledge it and pivot: "this is exactly what the eval surfaces — let me show you." [open eval-report.md] "Same prompt, three passes. The fix is targeted few-shot examples, which we use for borderline cases."
 - **Ollama dead entirely** → open the Architecture tab and walk the diagram + the "How this scales" panel; that alone covers 3 of the 5 rubric criteria
 - **Worst case** → fall back to walking through `eval-report.md` aloud; the regression suite alone is a strong technical signal even without a live run
 

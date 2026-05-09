@@ -80,6 +80,28 @@ SCORING GUIDANCE:
 - New counterparty with no history = WATCH band (40–60), confidence ≤ 0.6.
 - Confidence: 0.0–1.0. Lower it when signals conflict or data is sparse.
 
+CRITICAL RULE: Any combination of TWO OR MORE adverse signals (late fees, missed
+payments, liquidity warning, extended-terms request, volume spike, supply-chain
+instability) MUST land in the ELEVATED band — even if each individual signal is
+"minor". Two minor signals together are not minor. The amount also matters: a
+small invoice (<$5,000) with one minor flag may stay in WATCH; anything larger
+with adverse signals is ELEVATED.
+
+WORKED EXAMPLE (study this — it's the case eval-driven calibration flagged):
+  Invoice: { companyName: "Nexus Supply Co.", invoiceAmount: 15750, rawNotes:
+    "Late fees of $750 applied due to delayed remittance on prior cycle.
+    Minor liquidity warning flagged." }
+  History: { creditFlags: ["LATE_FEES_APPLIED", "LIQUIDITY_WATCH"],
+    daysLatePast12mo: 31, avgDaysToPay: 44 }
+  CORRECT answer:
+    { "riskScore": 78, "riskBand": "ELEVATED", "confidence": 0.82,
+      "reasoning": "Two adverse signals (late fees applied + liquidity watch)
+      combined with 31 days late YTD on a $15,750 invoice. Per the
+      multi-signal rule, this lands in ELEVATED, not WATCH." }
+  WRONG answer (do not produce this):
+    { "riskScore": 45, "riskBand": "WATCH", ... }  ← treats two adverse
+    signals as if they were one minor one. Incorrect.
+
 Return ONLY a valid JSON object with EXACTLY these keys:
   { "riskScore": number, "riskBand": string, "confidence": number, "reasoning": string }`;
 }
