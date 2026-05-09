@@ -6,11 +6,11 @@ Target: hit all 5 rubric criteria (clarity, practical usefulness, automation dep
 
 ## 0. Pre-flight (do NOT screen-share yet)
 
-- [ ] LM Studio's local server running on `:1234`; `Llama-3.2-3B-Instruct` loaded with **Device: NPU**, `Mistral-7B-Instruct-v0.3` loaded with **Device: GPU** (the iGPU tier safety net)
-- [ ] `ollama serve` running, `ollama list` shows both `gemma4:e4b` and `gemma2` (final fallback if LM Studio drops)
-- [ ] One warm-up run already executed since LM Studio booted, so first-load NPU compilation isn't on stage
+- [ ] `ollama serve` running, `ollama list` shows both `gemma4:e4b` and `gemma2`
+- [ ] One warm-up run completed in this Ollama session so the model is hot in RAM
 - [ ] `npm run dev` running, dev URL open in a clean browser window
 - [ ] `inbound_invoices/` folder ready with all 7 sample files
+- [ ] `npm run eval -- --n 3` run earlier today; `eval-report.md` open in a side tab in case Q&A asks about quality
 - [ ] Chaos mode is OFF
 - [ ] Pipeline tab is selected
 
@@ -31,16 +31,20 @@ Target: hit all 5 rubric criteria (clarity, practical usefulness, automation dep
 4. Click **View Xero payload** on Horizon → JSON modal opens with real-shape Xero `POST /invoices` body
 5. Click **View GoCardless** on Horizon → mandate + scheduled payment
 
-## 3. Switch to Live Trace (75 s)
+## 3. Switch to Live Trace (60 s)
 
 1. Click the **Live Trace** tab
 2. Point at the header strip: runs, tool calls, total LLM ms, retries, escalated count
 3. Open the Meridian (Chapter 11) run → expand a step or two:
-   > "You can see the agent's thought, the prompt sent, the raw JSON response, and the latency — every decision is auditable."
-4. **Highlight the green `NPU/Llama-3.2-3B` badge on each step:**
-   > "Every LLM call you just saw was served by the NPU on this laptop's Core Ultra — 11.5 TOPS at single-digit watts. The agent walks a tier chain: NPU first, Intel iGPU second for harder prompts, then CPU Ollama as the safety net. If I close LM Studio mid-run right now, the next step transparently falls through and the agent keeps going. The audience sees the silicon swap in the trace."
-5. Click **Download audit.csv** → show the file in the OS download bar
-   > "One row per agent step, including which silicon served each LLM call — drop straight into Splunk, Datadog, or compliance archive."
+   > "You can see the agent's thought, the prompt sent, the raw JSON response, and the latency — every decision is auditable. The model running here is Gemma local; the runtime layer is swappable, so swapping in OpenAI or Anthropic tool-use is a one-file change."
+4. Click **Download audit.csv** → show the file in the OS download bar
+   > "One row per agent step. Drop straight into Splunk, Datadog, or compliance archive."
+
+## 3b. Drop in a non-canonical PDF (30 s) — optional but high-impact
+
+1. **Reset Pipeline**, then drag in a single random invoice PDF you grabbed off the web before the call
+2. Watch the agent process it
+   > "I'm using pdf.js to extract real text from arbitrary PDFs — this isn't a rigged input set. Whatever invoice the audience hands me, the agent reads."
 
 ## 4. Demonstrate resilience — Chaos mode (45 s)
 
@@ -76,8 +80,17 @@ Anticipated questions + crisp answers:
 
 ## Backup if anything goes sideways on stage
 
-- **NPU drops** → orchestrator transparently falls through to `iGPU/Mistral-7B` (LM Studio, same HTTP server). Visible in trace; demo continues without a blip
-- **All of LM Studio drops** → falls through to `CPU/Ollama-Gemma4`, then `CPU/Ollama-Gemma2`. Slower but functionally identical
-- **Both stacks dead** → open the Architecture tab and walk the diagram + the "How this scales" panel; that alone covers 3 of the 5 rubric criteria
+- **gemma4:e4b errors** → orchestrator transparently falls through to `gemma2`. Visible in the trace as a tier transition; demo continues without a blip
+- **Ollama dead entirely** → open the Architecture tab and walk the diagram + the "How this scales" panel; that alone covers 3 of the 5 rubric criteria
+- **Worst case** → fall back to walking through `eval-report.md` aloud; the regression suite alone is a strong technical signal even without a live run
 
-The four-tier chain means it would take a complete laptop meltdown to lose the demo — and that's already a great talking point about resilience.
+## Backup answers to expected Q&A
+
+> "How do you know the agent is making good decisions?"
+- "I have a regression suite — `npm run eval` — that scores verdict accuracy, risk-band agreement, and flag-detection recall against ground truth across the sample invoices, and I run it three times to account for LLM non-determinism. Latest report is open in this tab."
+
+> "Why local Ollama and not Anthropic / OpenAI?"
+- "Trade finance data is sensitive, so on-prem is the conservative default. The runtime layer in `runtimes.js` is a thin adapter — swapping to Anthropic tool-use or an MCP server is a single-file change. I built it that way deliberately."
+
+> "What about non-canonical inputs — does this only work on your sample files?"
+- "No — pdf.js extracts text from any PDF. Want to hand me one?" (Have a backup PDF ready in `~/Downloads/`)

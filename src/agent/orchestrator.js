@@ -1,7 +1,7 @@
 // Hand-rolled tool-use loop. The LLM picks the next tool; we run it; we feed
 // the result back. Includes retry/backoff and Ollama model fallback.
 
-import policy from './policy.json';
+import policy from './policy.json' with { type: 'json' };
 import { TOOL_CATALOG, TOOL_IMPLS } from './tools.js';
 import { buildDecisionPrompt } from './prompts.js';
 import { getRuntime } from './runtimes.js';
@@ -15,14 +15,14 @@ import {
 
 // LLM tier chain — tried top-to-bottom on each call. Each entry names a runtime
 // adapter (see runtimes.js), the model id passed to that runtime, and a label
-// shown in the Live Trace tab so the audience sees which silicon served the
-// step. Reorder this array to flip primary/fallback without touching the loop.
+// shown in the Live Trace tab. Reorder this array to flip primary/fallback
+// without touching the loop. The OpenVINO runtime in runtimes.js is wired but
+// disabled by default; add an entry like
+//   { runtime: 'openvino', model: '<lm-studio-id>', label: 'NPU/<name>' }
+// at the top of this array to re-enable NPU/iGPU acceleration via LM Studio.
 const LLM_CHAIN = [
-  { runtime: 'openvino', model: 'llama-3.2-3b-instruct',    label: 'NPU/Llama-3.2-3B' },
-  { runtime: 'openvino', model: 'phi-3.5-mini-instruct',    label: 'NPU/Phi-3.5-Mini' },
-  { runtime: 'openvino', model: 'mistral-7b-instruct-v0.3', label: 'iGPU/Mistral-7B' },
-  { runtime: 'ollama',   model: 'gemma4:e4b',               label: 'CPU/Ollama-Gemma4' },
-  { runtime: 'ollama',   model: 'gemma2',                   label: 'CPU/Ollama-Gemma2' },
+  { runtime: 'ollama', model: 'gemma4:e4b', label: 'CPU/Ollama-Gemma4' },
+  { runtime: 'ollama', model: 'gemma:2b',   label: 'CPU/Ollama-Gemma-2B' },
 ];
 
 function makeLlmClient({ runId, kind }) {

@@ -1,0 +1,54 @@
+{
+  "$schema": "Ground-truth verdicts for the regression suite. expectedStatus is the only hard rubric; expectedRiskBand and mustDetectFlags are soft (adjacent bands are surfaced but not failures).",
+  "cases": [
+    {
+      "filename": "INV-103_Oceanic.pdf",
+      "expectedStatus": "approved",
+      "expectedRiskBand": "STANDARD",
+      "mustDetectFlags": [],
+      "notes": "Clean payer, early-payment discount, no adverse signals."
+    },
+    {
+      "filename": "INV-105_Standard.pdf",
+      "expectedStatus": "approved",
+      "expectedRiskBand": "STANDARD",
+      "mustDetectFlags": [],
+      "notes": "Routine maintenance invoice, client in good standing."
+    },
+    {
+      "filename": "INV-107_Horizon.jpg",
+      "expectedStatus": "approved",
+      "expectedRiskBand": "STANDARD",
+      "mustDetectFlags": ["EARLY_PAYER"],
+      "notes": "Excellent account status, paid previous 12 invoices early."
+    },
+    {
+      "filename": "INV-102_GlobalTech.pdf",
+      "expectedStatus": "escalated",
+      "expectedRiskBand": "ELEVATED",
+      "mustDetectFlags": ["MISSED_PAYMENT_X2", "SUPPLY_CHAIN_INSTABILITY"],
+      "notes": "Missed 2 prior deadlines, supply chain instability."
+    },
+    {
+      "filename": "INV-104_Valkin.pdf",
+      "expectedStatus": "escalated",
+      "expectedRiskBand": "ELEVATED",
+      "mustDetectFlags": ["LIQUIDITY_WATCH", "EXTENDED_TERMS_REQUESTED", "VOLUME_SPIKE_3X"],
+      "notes": "3x volume spike + extended-terms request — liquidity watch must trigger."
+    },
+    {
+      "filename": "INV-106_Nexus.png",
+      "expectedStatus": "escalated",
+      "expectedRiskBand": "ELEVATED",
+      "mustDetectFlags": ["LATE_FEES_APPLIED", "LIQUIDITY_WATCH"],
+      "notes": "Late fees applied, minor liquidity warning."
+    },
+    {
+      "filename": "INV-108_Meridian.pdf",
+      "expectedStatus": "escalated",
+      "expectedRiskBand": "CRITICAL",
+      "mustDetectFlags": ["CHAPTER_11_FILED", "EXTREME_CREDIT_RISK"],
+      "notes": "Chapter 11 bankruptcy — must be detected and escalated."
+    }
+  ]
+}

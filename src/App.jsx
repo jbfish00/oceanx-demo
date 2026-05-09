@@ -6,23 +6,15 @@ import { setChaosMode, getChaosMode } from './mocks/integrations.js';
 import TraceTab from './components/TraceTab.jsx';
 import ArchitectureTab from './components/ArchitectureTab.jsx';
 import PayloadModal from './components/PayloadModal.jsx';
-
-// Mock OCR map kept identical to the original demo so the existing 7 sample
-// invoices in inbound_invoices/ still produce the canonical demo scenarios.
-const MOCK_OCR_MAP = {
-  'INV-102_GlobalTech.pdf': "Global Tech Components Ltd. Total Due: $45,250.00. Warning Code 4A: Client has missed 2 previous payment deadlines. Supply chain instability noted.",
-  'INV-103_Oceanic.pdf': "Oceanic Freights. Total: $8,900.00. Early payment discount applied. Standard shipping rates. No adverse credit events reported.",
-  'INV-104_Valkin.pdf': "VALKIN LIMITED. Total Due: $112,000.00. Qualitative Notes: Massive volume increase detected. Client requesting extended credit terms due to cash flow constraints. Evaluate liquidity.",
-  'INV-105_Standard.pdf': "Standard Shippers LLC. TOTAL AMOUNT DUE: $3,200.00. Standard routine maintenance invoice. Client is in good standing.",
-  'INV-106_Nexus.png': "Nexus Supply Co. TOTAL DUE: $15,750.00. SYSTEM NOTE: Late fees of $750 applied due to delayed remittance on prior cycle. Minor liquidity warning flagged.",
-  'INV-107_Horizon.jpg': "Horizon Trade Solutions. TOTAL AMOUNT: $2,100.00. Account Status: Excellent. Paid previous 12 invoices early. No risk factors present.",
-  'INV-108_Meridian.pdf': "MERIDIAN MANUFACTURING INC. TOTAL BALANCE DUE NOW: $88,000.00. CRITICAL SUPPLIER NOTIFICATION: Meridian Manufacturing Inc. has recently filed for Chapter 11 bankruptcy. Extreme credit risk event."
-};
+import { resolveOcrByFilename } from './lib/mockOcrMap.js';
+import { extractPdfText } from './lib/pdfText.js';
 
 const FEEDBACK_KEY = 'oceanx_hitl_overrides_v1';
 
 async function extractTextFromFile(file) {
   const ext = file.name.split('.').pop().toLowerCase();
+
+  // Native text reader for plain-text formats — unchanged from v1.
   if (['csv', 'json', 'md', 'html', 'txt', 'tex'].includes(ext)) {
     return new Promise((resolve, reject) => {
       const r = new FileReader();
@@ -31,12 +23,21 @@ async function extractTextFromFile(file) {
       r.readAsText(file);
     });
   }
-  if (MOCK_OCR_MAP[file.name]) return MOCK_OCR_MAP[file.name];
-  const lower = file.name.toLowerCase();
-  if (ext === 'png' || lower.includes('nexus')) return MOCK_OCR_MAP['INV-106_Nexus.png'];
-  if (ext === 'jpg' || ext === 'jpeg' || lower.includes('horizon')) return MOCK_OCR_MAP['INV-107_Horizon.jpg'];
-  if (ext === 'pdf') return 'Generic Scanned Invoice. Total Due: $5,500.00. Notes: Standard client. No risk factors present.';
-  return 'Unknown Document Data';
+
+  // Real PDF parsing first; fall back to the canonical mock map only if pdf.js
+  // can't extract text (image-only scans) or throws.
+  if (ext === 'pdf') {
+    try {
+      const text = await extractPdfText(file);
+      if (text && text.length > 20) return text;
+    } catch {
+      // Fall through to mock map.
+    }
+    return resolveOcrByFilename(file.name) ?? 'Unknown Document Data';
+  }
+
+  // Image-only inputs — we don't run real OCR, fall straight to the mock map.
+  return resolveOcrByFilename(file.name) ?? 'Unknown Document Data';
 }
 
 export default function App() {

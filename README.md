@@ -56,45 +56,31 @@ flowchart LR
 
 ## Running locally
 
-The agent walks an LLM tier chain top-to-bottom on each call (see `LLM_CHAIN` in [src/agent/orchestrator.js](src/agent/orchestrator.js)). Out of the box the chain prefers NPU/iGPU runtimes via LM Studio and falls all the way through to Ollama on CPU. **Any one tier being available is enough to run the demo** — you don't need both stacks.
-
 ```bash
-# Required: at least one of the two stacks below must be running.
-
-# Option 1 — Ollama (CPU, simplest setup)
+# 1. Make sure Ollama is up with the right models
 ollama pull gemma4:e4b   # primary
 ollama pull gemma2       # fallback
 ollama serve
 
-# Option 2 — LM Studio with OpenVINO runtime (Intel NPU + Arc iGPU)
-# See the "Running with the Intel NPU" section below.
-
-# Then:
+# 2. Install + run
 npm install
 npm run dev
 ```
 
-Open the dev URL, click **Upload Directory & Run Agents**, point it at any folder containing the seven sample invoice files (or any mix of `.pdf`, `.png`, `.jpg`, `.csv`, `.txt`).
+Open the dev URL, click **Upload Directory & Run Agents**, point it at any folder containing the seven sample invoice files (or any mix of `.pdf`, `.png`, `.jpg`, `.csv`, `.txt`). Real PDFs are parsed with pdf.js — you don't need to use the canonical sample filenames.
 
-## Running with the Intel NPU
+## Regression eval
 
-Tested on **Intel Core Ultra 9 185H** (Meteor Lake-H, 11.5-TOPS AI Boost NPU + Intel Arc iGPU). The same setup applies to other Core Ultra laptop SKUs.
+```bash
+npm run eval               # one pass
+npm run eval -- --n 3      # three passes, reports best/worst/median
+```
 
-1. **Install LM Studio** ≥ 0.3.6 from https://lmstudio.ai
-2. **Enable the OpenVINO runtime**: Settings → Runtimes → install "OpenVINO". This pulls Intel's NPU + GPU plugin DLLs.
-3. **Pull these OpenVINO models** from the model browser (filter by "OpenVINO"):
-   - `OpenVINO/Llama-3.2-3B-Instruct-int4-ov` — primary NPU tier (3B INT4)
-   - `OpenVINO/Phi-3.5-mini-instruct-int4-ov` — secondary NPU tier (3.8B INT4)
-   - `OpenVINO/Mistral-7B-Instruct-v0.3-int4-ov` — iGPU tier (7B doesn't fit on Meteor Lake's NPU)
-4. **Configure each model's device** in LM Studio's load options:
-   - Llama 3.2 3B → Device: **NPU**
-   - Phi-3.5-Mini → Device: **NPU**
-   - Mistral 7B → Device: **GPU** (Intel Arc)
-   First-load on NPU takes 90–180 s while OpenVINO compiles the graph; subsequent loads are instant.
-5. **Start the local server**: Developer tab → Start Server (default port 1234, OpenAI-compatible).
-6. Reload the demo. The Live Trace tab will now show `NPU/Llama-3.2-3B` (green badge) on each LLM step. Stop LM Studio mid-batch to see the chain transparently fall through to Ollama with the tier shown in amber.
+Reads `src/eval/expected.json` (ground-truth verdicts per sample invoice), runs each through the agent, scores verdict accuracy + risk-band agreement + flag-detection recall, and writes `eval-report.md`. Catches prompt regressions before they ship.
 
-The model ids in `LLM_CHAIN` must match the ids LM Studio assigns (visible in the Developer tab next to each loaded model). Edit them there if your local ids differ.
+## Optional: NPU / iGPU acceleration
+
+The agent uses an LLM tier chain (`LLM_CHAIN` in [src/agent/orchestrator.js](src/agent/orchestrator.js)) and an OpenVINO runtime adapter is wired in [src/agent/runtimes.js](src/agent/runtimes.js) but disabled by default. To enable Intel NPU/iGPU acceleration via LM Studio, install LM Studio ≥ 0.3.6 with the OpenVINO runtime, load OpenVINO IR models, and prepend entries like `{ runtime: 'openvino', model: '<lm-studio-id>', label: 'NPU/<name>' }` to `LLM_CHAIN`. The chain will fall through to Ollama on any tier failure.
 
 ### Sample inputs
 
@@ -124,11 +110,17 @@ src/
 ├── mocks/
 │   ├── integrations.js      # Xero / GoCardless / HubSpot mocks
 │   └── companyDb.js         # 7-counterparty credit + history database
-└── components/
-    ├── TraceTab.jsx         # Live timeline view + aggregates
-    ├── TraceStep.jsx        # One collapsible timeline row
-    ├── ArchitectureTab.jsx  # Mermaid diagram + scaling story
-    └── PayloadModal.jsx     # JSON payload viewer (Xero/GC/HS)
+├── components/
+│   ├── TraceTab.jsx         # Live timeline view + aggregates
+│   ├── TraceStep.jsx        # One collapsible timeline row
+│   ├── ArchitectureTab.jsx  # Mermaid diagram + scaling story
+│   └── PayloadModal.jsx     # JSON payload viewer (Xero/GC/HS)
+├── lib/
+│   └── pdfText.js           # pdf.js wrapper for real PDF text extraction
+└── eval/
+    ├── expected.json        # Ground-truth verdicts per sample invoice
+    ├── runEval.js           # `npm run eval` entry point
+    └── loadOcr.js           # Shared OCR helper used by app + eval
 ```
 
 ## Demo script
