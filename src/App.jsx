@@ -261,6 +261,38 @@ function ReviewQueue({ runs, batchStatus, onViewPayload, onOverride }) {
                   </span>
                   "{reason}"
                 </div>
+                <div className="flex gap-2 flex-wrap mb-3">
+                  {run.summary?.state?.apolloEnrichment?.response && (
+                    <button
+                      onClick={() =>
+                        onViewPayload(`Apollo — ${inv?.companyName}`, run.summary?.state?.apolloEnrichment?.response)
+                      }
+                      className="text-xs bg-gray-100 text-gray-700 hover:bg-gray-200 px-3 py-1.5 rounded font-medium transition-colors"
+                    >
+                      View Apollo
+                    </button>
+                  )}
+                  {run.summary?.state?.instantlyCampaign?.response && (
+                    <button
+                      onClick={() =>
+                        onViewPayload(`Instantly — ${inv?.companyName}`, run.summary?.state?.instantlyCampaign?.response)
+                      }
+                      className="text-xs bg-gray-100 text-gray-700 hover:bg-gray-200 px-3 py-1.5 rounded font-medium transition-colors"
+                    >
+                      View Instantly
+                    </button>
+                  )}
+                  {run.summary?.state?.dripifySequence?.response && (
+                    <button
+                      onClick={() =>
+                        onViewPayload(`Dripify — ${inv?.companyName}`, run.summary?.state?.dripifySequence?.response)
+                      }
+                      className="text-xs bg-gray-100 text-gray-700 hover:bg-gray-200 px-3 py-1.5 rounded font-medium transition-colors"
+                    >
+                      View Dripify
+                    </button>
+                  )}
+                </div>
                 <div className="flex gap-3">
                   <button
                     onClick={() =>
@@ -308,6 +340,10 @@ function ApprovedQueue({ runs, batchStatus, onViewPayload }) {
             const xero = run.summary?.state?.xeroInvoice?.response;
             const gc = run.summary?.state?.gocardlessPayment?.response;
             const hs = run.summary?.state?.hubspotDeal?.response;
+            const ap = run.summary?.state?.apolloEnrichment?.response;
+            const cin7p = run.summary?.state?.cin7Product?.response;
+            const cin7po = run.summary?.state?.cin7PurchaseOrder?.response;
+            const wt = run.summary?.state?.wiseTransfer?.response;
             return (
               <div key={run.id} className="p-6 hover:bg-gray-50 transition-colors">
                 <div className="flex items-start justify-between mb-3">
@@ -319,12 +355,36 @@ function ApprovedQueue({ runs, batchStatus, onViewPayload }) {
                     <div className="text-xs font-mono text-gray-400 mt-1">{run.filename}</div>
                   </div>
                   <div className="text-right text-xs">
+                    {ap && <Tag color="purple">Apollo · enriched</Tag>}
+                    {cin7p && <Tag color="teal">CIN7 · {cin7p.SKU}</Tag>}
                     {xero && <Tag color="green">Xero · {xero.InvoiceNumber}</Tag>}
                     {gc && <Tag color="blue">GoCardless · {gc.charge_date}</Tag>}
+                    {wt && <Tag color="indigo">Wise · {wt.transfer_id}</Tag>}
                     {hs && <Tag color="orange">HubSpot · {hs.id}</Tag>}
                   </div>
                 </div>
                 <div className="flex gap-2 flex-wrap">
+                  {ap && (
+                    <button
+                      onClick={() => onViewPayload(`Apollo — ${inv?.companyName}`, ap)}
+                      className="text-xs bg-gray-100 text-gray-700 hover:bg-gray-200 px-3 py-1.5 rounded font-medium transition-colors"
+                    >
+                      View Apollo
+                    </button>
+                  )}
+                  {cin7p && (
+                    <button
+                      onClick={() =>
+                        onViewPayload(`CIN7 Product — ${inv?.companyName}`, {
+                          product: cin7p,
+                          purchaseOrder: cin7po,
+                        })
+                      }
+                      className="text-xs bg-gray-100 text-gray-700 hover:bg-gray-200 px-3 py-1.5 rounded font-medium transition-colors"
+                    >
+                      View CIN7
+                    </button>
+                  )}
                   <button
                     onClick={() =>
                       onViewPayload(`Xero — ${inv?.companyName}`, {
@@ -347,6 +407,19 @@ function ApprovedQueue({ runs, batchStatus, onViewPayload }) {
                   >
                     View GoCardless
                   </button>
+                  {wt && (
+                    <button
+                      onClick={() =>
+                        onViewPayload(`Wise Transfer — ${inv?.companyName}`, {
+                          request: run.summary?.state?.wiseTransfer?.request,
+                          response: wt,
+                        })
+                      }
+                      className="text-xs bg-gray-100 text-gray-700 hover:bg-gray-200 px-3 py-1.5 rounded font-medium transition-colors"
+                    >
+                      View Wise
+                    </button>
+                  )}
                   <button
                     onClick={() =>
                       onViewPayload(`HubSpot — ${inv?.companyName}`, {
@@ -373,6 +446,9 @@ function Tag({ color, children }) {
     green: 'bg-green-50 text-green-700 border-green-200',
     blue: 'bg-blue-50 text-blue-700 border-blue-200',
     orange: 'bg-orange-50 text-orange-700 border-orange-200',
+    purple: 'bg-purple-50 text-purple-700 border-purple-200',
+    teal: 'bg-teal-50 text-teal-700 border-teal-200',
+    indigo: 'bg-indigo-50 text-indigo-700 border-indigo-200',
   }[color] || 'bg-gray-50 text-gray-700 border-gray-200';
   return (
     <div className={`inline-block ${cls} border px-2 py-0.5 rounded mb-1 ml-1 font-mono`}>

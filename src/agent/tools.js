@@ -1,7 +1,7 @@
 // Tool catalog for the agent. Each tool has a JSON-schema-shaped definition
 // (so it ports cleanly to Anthropic tool-use or MCP later) and a JS impl.
 
-import { xero, gocardless, hubspot, companyDb } from '../mocks/integrations.js';
+import { xero, gocardless, hubspot, companyDb, apollo, instantly, dripify, cin7, wise } from '../mocks/integrations.js';
 import { buildExtractPrompt, buildScorePrompt } from './prompts.js';
 
 // ---------- Tool definitions (the LLM sees these) ----------
@@ -15,6 +15,21 @@ export const TOOL_CATALOG = [
     name: 'lookupCompanyHistory',
     description: 'Pull counterparty payment history + credit flags from CompanyDB.',
     args: { companyName: 'string' },
+  },
+  {
+    name: 'enrichLeadApollo',
+    description: 'Enrich counterparty profile from Apollo (contacts, revenue, industry). Call after extractInvoice, before lookupCompanyHistory.',
+    args: { companyName: 'string' },
+  },
+  {
+    name: 'triggerInstantlyCampaign',
+    description: 'Trigger cold-email outreach via Instantly. Only call when state.history.found === false (new counterparty with no prior history).',
+    args: { companyName: 'string', email: 'string (from apolloEnrichment contacts)' },
+  },
+  {
+    name: 'startDripifySequence',
+    description: 'Enroll prospect in LinkedIn outreach via Dripify. Only call when state.history.found === false.',
+    args: { companyName: 'string', linkedinUrl: 'string (from apolloEnrichment contacts)' },
   },
   {
     name: 'scoreRisk',
@@ -35,6 +50,21 @@ export const TOOL_CATALOG = [
     name: 'scheduleGoCardlessDebit',
     description: 'Create direct-debit mandate + schedule charge. Requires Xero invoice id.',
     args: { /* uses state.invoice and state.xeroInvoice */ },
+  },
+  {
+    name: 'createCIN7Product',
+    description: 'Create product record in CIN7 inventory system. Call on clear-to-fund path before createCIN7PurchaseOrder.',
+    args: { /* uses state.invoice */ },
+  },
+  {
+    name: 'createCIN7PurchaseOrder',
+    description: 'Create purchase order in CIN7 linked to the product. Requires state.cin7Product.',
+    args: { /* uses state.invoice and state.cin7Product */ },
+  },
+  {
+    name: 'initiateWiseTransfer',
+    description: 'Pay supplier via Wise bank transfer. Call after scheduleGoCardlessDebit, before updateHubSpotDeal.',
+    args: { /* uses state.invoice */ },
   },
   {
     name: 'updateHubSpotDeal',
@@ -66,6 +96,32 @@ export const TOOL_IMPLS = {
     const name = args.companyName || state.invoice?.companyName;
     const history = await companyDb.lookup(name);
     return { history };
+  },
+
+  async enrichLeadApollo({ args, state }) {
+    const name = args.companyName || state.invoice?.companyName;
+    const response = await apollo.enrichCompany(name);
+    return { apolloEnrichment: { request: { companyName: name }, response } };
+  },
+
+  async triggerInstantlyCampaign({ args, state }) {
+    const contact = state.apolloEnrichment?.response?.contacts?.[0];
+    const payload = {
+      companyName: args.companyName || state.invoice?.companyName,
+      email: contact?.email || args.email || 'unknown@example.com',
+    };
+    const response = await instantly.triggerCampaign(payload);
+    return { instantlyCampaign: { request: payload, response } };
+  },
+
+  async startDripifySequence({ args, state }) {
+    const contact = state.apolloEnrichment?.response?.contacts?.[0];
+    const payload = {
+      companyName: args.companyName || state.invoice?.companyName,
+      linkedinUrl: contact?.linkedin_url || args.linkedinUrl || '',
+    };
+    const response = await dripify.startSequence(payload);
+    return { dripifySequence: { request: payload, response } };
   },
 
   async scoreRisk({ state, llm, policy }) {
@@ -115,6 +171,31 @@ export const TOOL_IMPLS = {
       gocardlessMandate: { request: mandateReq, response: mandate },
       gocardlessPayment: { request: { mandateId: mandate.id, amount: inv.invoiceAmount, currency: inv.currency || 'USD' }, response: payment },
     };
+  },
+
+  async createCIN7Product({ state }) {
+    const inv = state.invoice;
+    if (!inv) throw new Error('createCIN7Product requires invoice in state');
+    const payload = { companyName: inv.companyName, amount: Number(inv.invoiceAmount) || 0, currency: inv.currency || 'USD' };
+    const response = await cin7.createProduct(payload);
+    return { cin7Product: { request: payload, response } };
+  },
+
+  async createCIN7PurchaseOrder({ state }) {
+    const inv = state.invoice;
+    const product = state.cin7Product?.response;
+    if (!inv || !product) throw new Error('createCIN7PurchaseOrder requires invoice and cin7Product');
+    const payload = { companyName: inv.companyName, productId: product.ProductID, amount: Number(inv.invoiceAmount) || 0, currency: inv.currency || 'USD' };
+    const response = await cin7.createPurchaseOrder(payload);
+    return { cin7PurchaseOrder: { request: payload, response } };
+  },
+
+  async initiateWiseTransfer({ state }) {
+    const inv = state.invoice;
+    if (!inv) throw new Error('initiateWiseTransfer requires invoice in state');
+    const payload = { companyName: inv.companyName, amount: Number(inv.invoiceAmount) || 0, currency: inv.currency || 'USD' };
+    const response = await wise.initiateTransfer(payload);
+    return { wiseTransfer: { request: payload, response } };
   },
 
   async updateHubSpotDeal({ state }) {

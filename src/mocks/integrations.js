@@ -115,3 +115,115 @@ export const companyDb = {
     return lookupCompany(name);
   },
 };
+
+// ---------- Apollo ----------
+export const apollo = {
+  async enrichCompany(name) {
+    await sleep(jitter(120, 280));
+    const slug = (name || 'unknown').toLowerCase().replace(/\s+/g, '');
+    return {
+      id: rid('APO', 12),
+      name,
+      domain: `${slug}.com`,
+      industry: 'Trade & Logistics',
+      employees: Math.floor(50 + Math.random() * 450),
+      estimated_annual_revenue: '$10M–$50M',
+      location: 'Singapore',
+      contacts: [
+        {
+          name: 'Alex Morgan',
+          title: 'CFO',
+          email: `a.morgan@${slug}.com`,
+          linkedin_url: `https://linkedin.com/in/alexmorgan`,
+        },
+      ],
+      last_enriched_at: new Date().toISOString(),
+    };
+  },
+};
+
+// ---------- Instantly ----------
+export const instantly = {
+  async triggerCampaign(payload) {
+    await sleep(jitter(100, 240));
+    return {
+      campaign_id: rid('CAMP', 10),
+      status: 'active',
+      lead_email: payload.email,
+      sequence: 'OceanX Trade Finance — Cold Outreach',
+      first_email_scheduled_at: new Date(Date.now() + 86400000).toISOString(),
+      created_at: new Date().toISOString(),
+    };
+  },
+};
+
+// ---------- Dripify ----------
+export const dripify = {
+  async startSequence(payload) {
+    await sleep(jitter(100, 220));
+    return {
+      sequence_id: rid('DRP', 10),
+      prospect_linkedin: payload.linkedinUrl || 'https://linkedin.com/in/unknown',
+      campaign: 'OceanX Trade Finance — LinkedIn',
+      status: 'enrolled',
+      first_touch_scheduled_at: new Date(Date.now() + 2 * 3600000).toISOString(),
+      created_at: new Date().toISOString(),
+    };
+  },
+};
+
+// ---------- CIN7 ----------
+export const cin7 = {
+  async createProduct(payload) {
+    await sleep(jitter(150, 320));
+    const sku = `OX-${(payload.companyName || 'UNK').slice(0, 3).toUpperCase()}-${Math.floor(1000 + Math.random() * 8999)}`;
+    return {
+      ProductID: rid('PRD', 10),
+      SKU: sku,
+      Name: `Trade Finance — ${payload.companyName}`,
+      Type: 'Non-Inventory',
+      UnitPrice: payload.amount,
+      CurrencyCode: payload.currency || 'USD',
+      IsActive: true,
+      CreatedDate: new Date().toISOString().slice(0, 10),
+    };
+  },
+  async createPurchaseOrder(payload) {
+    await sleep(jitter(180, 360));
+    return {
+      PurchaseOrderID: rid('PO', 10),
+      OrderNumber: `OX-PO-${Date.now()}`,
+      Status: 'Draft',
+      SupplierName: payload.companyName,
+      Lines: [
+        {
+          ProductID: payload.productId,
+          Qty: 1,
+          UnitCost: payload.amount,
+          LineTotal: payload.amount,
+        },
+      ],
+      TotalExTax: payload.amount,
+      CurrencyCode: payload.currency || 'USD',
+      CreatedDate: new Date().toISOString().slice(0, 10),
+    };
+  },
+};
+
+// ---------- Wise ----------
+export const wise = {
+  async initiateTransfer(payload) {
+    await sleep(jitter(200, 400));
+    return {
+      transfer_id: rid('TR', 12),
+      target_account_id: rid('ACC', 10),
+      source_currency: payload.currency || 'USD',
+      target_currency: payload.currency || 'USD',
+      amount: payload.amount,
+      reference: `OCEANX-SUP-${Date.now()}`,
+      status: 'incoming_payment_waiting',
+      estimated_delivery: new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10),
+      created_at: new Date().toISOString(),
+    };
+  },
+};

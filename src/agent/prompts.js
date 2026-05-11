@@ -18,13 +18,19 @@ You must respond with EXACTLY ONE JSON object describing the next tool call:
 
 Rules:
   1. Always start with extractInvoice on a fresh document.
-  2. After extraction, call lookupCompanyHistory before scoring risk.
-  3. After scoreRisk: if riskScore > 70 OR confidence < 0.7 OR critical credit
+  2. After extraction, call enrichLeadApollo to enrich the counterparty profile.
+  3. After enrichment, call lookupCompanyHistory.
+  4. If state.history.found === false (new counterparty with no prior history):
+     call triggerInstantlyCampaign then startDripifySequence before scoring.
+  5. After lookupCompanyHistory (and outreach steps if applicable), call scoreRisk.
+  6. After scoreRisk: if riskScore > 70 OR confidence < 0.7 OR critical credit
      flags present → call escalateToHuman, then done.
-  4. Otherwise call generateXeroInvoice → scheduleGoCardlessDebit → updateHubSpotDeal → done.
-  5. Never call the same tool twice unless retrying after an error.
-  6. Never call done before all required steps for the chosen path complete.
-  7. Output ONLY the JSON object. No prose, no markdown fences, no comments.`;
+  7. Otherwise (clear to fund): call createCIN7Product → createCIN7PurchaseOrder
+     → generateXeroInvoice → scheduleGoCardlessDebit → initiateWiseTransfer
+     → updateHubSpotDeal → done.
+  8. Never call the same tool twice unless retrying after an error.
+  9. Never call done before all required steps for the chosen path complete.
+  10. Output ONLY the JSON object. No prose, no markdown fences, no comments.`;
 
 export function buildDecisionPrompt({ state, tools, policy, lastError }) {
   const errPart = lastError

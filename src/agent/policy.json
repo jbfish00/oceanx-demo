@@ -11,15 +11,19 @@
     "escalateIfRiskScoreAbove": 70,
     "escalateIfConfidenceBelow": 0.7,
     "escalateIfFlagsContainAny": ["CHAPTER_11_FILED", "EXTREME_CREDIT_RISK", "LIQUIDITY_WATCH"],
-    "stepCap": 8,
+    "stepCap": 16,
     "toolRetry": { "maxAttempts": 3, "backoffMs": [200, 600, 1500] }
   },
   "happyPath": [
     "extractInvoice",
+    "enrichLeadApollo",
     "lookupCompanyHistory",
     "scoreRisk",
+    "createCIN7Product",
+    "createCIN7PurchaseOrder",
     "generateXeroInvoice",
     "scheduleGoCardlessDebit",
+    "initiateWiseTransfer",
     "updateHubSpotDeal",
     "done"
   ]
