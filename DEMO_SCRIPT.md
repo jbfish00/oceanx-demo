@@ -21,22 +21,24 @@ Target: hit all 5 rubric criteria (clarity, practical usefulness, automation dep
 
 ## 1. Frame the problem (30 s)
 
-> "OceanX's thesis is that humans should focus on relationships and capital decisions; agents should run everything else. Today's invoice intake is the bottleneck — somebody manually OCRs each PDF, looks up the counterparty, decides whether to fund, then hand-keys it into Xero, GoCardless, and HubSpot. I built a multi-step agent that owns that whole chain. Humans only see what the agent escalates."
+> "OceanX's thesis is that humans should focus on relationships and capital decisions; agents should run everything else. Right now there's a person manually OCR-ing PDFs, looking up counterparties, scoring risk, and hand-keying data into eight separate systems — CIN7, Xero, GoCardless, Wise, HubSpot, Apollo, Instantly, Dripify. I built a multi-step agent that owns that entire chain. Humans only see what the agent escalates."
 
 ## 2. Run the curated batch (~9 min — narrate while it runs)
 
 1. Click **Upload Directory & Run Agents** → pick `DEMO_LIVE/`
 2. As the first file (Horizon) starts, frame:
-   > "I'm dropping in three invoices. Each goes through a real tool-use loop: the LLM picks the next tool — extract, lookup history, score risk — then either escalates or pushes through Xero, GoCardless, and HubSpot. Three to five LLM calls per file, plus four mock API integrations. Each takes about 3 minutes on CPU. While it runs I'll show you the agent's decision-making."
+   > "Three invoices, each triggering a real tool-use loop across all eight integrations. The LLM picks the next tool at every step — Apollo enrichment, CompanyDB credit lookup, risk scoring, then either escalates or runs the full ops chain: CIN7 inventory, Xero invoice, GoCardless direct debit, Wise supplier transfer, HubSpot CRM. Around ten LLM decisions per file on the approved path. Each takes about 3-4 minutes on CPU. While it runs I'll show you the decision-making."
 3. **Switch to Live Trace immediately** while file 1 is processing (don't wait for completion). Point at the trace timeline as steps appear in real time:
-   > "There's the agent picking `extractInvoice` — here's the LLM's thought, the prompt sent, the response, the latency. The next decision is `lookupCompanyHistory` — that's the CompanyDB tool returning prior payment behavior."
+   > "There's the agent picking `extractInvoice` — here's the LLM's thought, the prompt sent, the response, the latency. Now `enrichLeadApollo` — that's pulling company profile, contacts, revenue estimate from Apollo. Next is `lookupCompanyHistory` — CompanyDB returning prior payment behaviour and credit flags."
 4. When all three complete, switch back to **Pipeline** tab. Expected outcomes:
-   - **1 auto-approved**: Horizon — green Xero / GoCardless / HubSpot tags
+   - **1 auto-approved**: Horizon — Apollo / CIN7 / Xero / GoCardless / Wise / HubSpot tags all green
    - **2 escalated**: Valkin (3 flags: liquidity watch, extended-terms request, volume spike) and Meridian (Chapter 11)
-5. Click **View Xero payload** on Horizon → real-shape Xero `POST /invoices` body in the modal
-6. Click **View GoCardless** on Horizon → mandate + scheduled payment payload
-7. On Meridian, point at the AI Underwriting Note:
-   > "The agent caught Chapter 11 from a single line in the OCR text and routed straight to human review without trying to push it through. That's the routing gate from `policy.json` doing its job."
+5. Click **View Apollo** on Horizon → enriched company profile with contacts and revenue estimate
+6. Click **View CIN7** on Horizon → product record + purchase order payload
+7. Click **View Xero payload** on Horizon → real-shape Xero `POST /invoices` body
+8. Click **View Wise** on Horizon → supplier transfer payload with estimated delivery date
+9. On Meridian, point at the AI Underwriting Note:
+   > "The agent caught Chapter 11 from a single line in the OCR text and routed straight to human review — no CIN7, no Xero, no payment initiated. That's the routing gate from `policy.json` doing its job."
 
 ## 3. Audit trail (45 s)
 
@@ -57,16 +59,19 @@ This run is one file (Horizon) so it's only one ~3-minute wait, not three.
 ## 5. Architecture + scaling story (45 s)
 
 1. Click the **Architecture** tab
-2. Walk the Mermaid diagram briefly
+2. Walk the Mermaid diagram — point out the two paths (dashed = conditional outreach for new counterparties, solid = approved ops chain)
 3. Hit the "How this scales" panel:
-   > "Today this is one React process. To scale, swap the in-memory queue for BullMQ/Redis and run N orchestrator workers — the agent code is unchanged. The tool definitions are already JSON-schema-shaped, so swapping Ollama for Anthropic tool-use is a one-file change. Each mock becomes its own MCP server. And this same trace store is what an underwriting agent, a lead-gen agent, and a collections agent would all emit into — that's how you get to a multi-agent system."
+   > "Today this is one React process hitting eight mocked integrations. To scale: swap the in-memory queue for BullMQ/Redis, run N orchestrator workers — agent code unchanged. Every tool definition is already JSON-schema-shaped, so swapping Ollama for Anthropic tool-use is a one-file change. Each mock becomes its own MCP server. And this exact trace store is what a collections agent, a contract-gen agent, and a lead-gen agent would all emit into — that's how you build a multi-agent mesh without re-architecting anything."
 
 ## 6. Q&A
 
 Anticipated questions + crisp answers:
 
+**Q: Which tools does this cover?**
+> "All eight from the brief — Apollo for enrichment, Instantly and Dripify for outreach, CIN7 for inventory and purchase orders, Xero for invoicing, GoCardless for direct debit collection, Wise for supplier payment, HubSpot for CRM. You can click into any payload in the Pipeline tab."
+
 **Q: Why a local LLM and not Claude / GPT?**
-> "Trade finance data is sensitive — running on-prem gives OceanX privacy by default. The architecture lets you swap to Anthropic tool-use in one file when latency or quality matters more than locality."
+> "Trade finance data is sensitive — running on-prem gives OceanX privacy by default. The runtime adapter in `runtimes.js` is a thin interface; swapping to Anthropic tool-use is a one-file change. I built it that way deliberately."
 
 **Q: How do you know it's actually getting the right answer?**
 > "I built a regression eval — three passes through the full 7-invoice ground truth set. Latest run: 100% median verdict accuracy, 100% risk-band agreement, 100% flag-detection recall. One borderline case (Nexus — late fees plus minor liquidity) flipped to approved on one pass out of 21; I added a targeted few-shot to the scoring prompt covering that exact two-signal scenario, re-ran the eval, and confirmed it doesn't regress the others. Here's the report." [Open eval-report.md tab]
@@ -77,8 +82,8 @@ Anticipated questions + crisp answers:
 **Q: What about the human-in-the-loop signal?**
 > "When a reviewer manually approves an escalated item, that override is captured to localStorage. The natural next step is to inject the last N overrides into the system prompt as few-shot examples — a tight learning loop without retraining."
 
-**Q: How would you extend this to lead-gen / contract-gen / collections?**
-> "Each becomes a sibling agent emitting into the same trace store. The orchestrator pattern doesn't change; the tool catalog does. The CompanyDB lookup tool, in particular, is shared across underwriting and collections."
+**Q: How would you extend this to collections or contract-gen?**
+> "Each becomes a sibling agent emitting into the same trace store. The orchestrator pattern doesn't change; only the tool catalog does. CompanyDB and Apollo enrichment are already shared across the underwriting and outreach paths — collections just adds a payment-chase tool."
 
 ---
 

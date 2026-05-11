@@ -173,7 +173,9 @@ function PipelineView({
           <h2 className="text-xl font-bold">Directory Watcher</h2>
           <p className="text-sm text-gray-500 mt-1">
             Select your local <code className="bg-gray-100 px-1 rounded">inbound_invoices</code> folder. Each file
-            triggers a multi-step agent: extract → lookup history → score risk → invoice → debit → CRM.
+            triggers a full pipeline: Apollo enrichment → CompanyDB lookup → risk scoring → CIN7 inventory
+            → Xero invoice → GoCardless direct debit → Wise supplier transfer → HubSpot CRM.
+            New counterparties also trigger Instantly + Dripify outreach.
           </p>
         </div>
 
